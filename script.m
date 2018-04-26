@@ -1,13 +1,41 @@
 %%
-clear all
-clear classes all
+clear
 clc
+addpath ~/Projects/eeglab;eeglab;
 close all
-addpath(genpath('/home/ale/Projects/headModel/'))
 
+%% Simulate one column
+cc = CorticalColumn({'sigma',diag([1 1 1]*1e-2)});
+cc.simulate;
+cc.plot
 
+%% One column with spike input
+Fs = 1/cc.dt;
+u = zeros(cc.nt,3);
+u(Fs:Fs+10,2) = 100;
+cc = CorticalColumn({'sigma',diag(0.01*ones(3,1)),'u',u});
+cc.simulate;
+openField = [1, 5];
+cc.plot(openField)
+
+%% Two coupled columns
+u1 = zeros(cc.nt,3);
+u1(Fs:Fs+10,3) = 0;
+u2 = zeros(cc.nt,3);
+%u2(Fs:Fs+10,2) = 10;
+
+cc = CorticalColumn({'sigma',diag([1 1 1]*1e2),'u',u1});
+
+n = 100;
+corticalColumns = repmat({cc},n,1);
+dcm = DynamicCausalModel({'nmmArray',corticalColumns,'SchortRange',0.02*(triu(rand(n))-tril(rand(n)))});
+pyCell = 1:6:dcm.nx;
+xsim = dcm.simulate;
+dcm.plot(xsim(pyCell,:))
 %%
-hm = headModel.loadFromFile(which('head_modelColin27_2003_Standard-10-5-Cap65.mat'));
+
+
+hm = headModel.loadDefault();
 cortex = hm.cortex;
 Csr = geometricTools.getAdjacencyMatrix(cortex.vertices,cortex.faces);
 
@@ -19,21 +47,7 @@ for k=1:size(cortex.vertices,1)
     %Dist(k,ind) = 1./(d+eps)/1./(sum(d)+eps);
     Dist(k,ind) = exp(-0.5*d/sum(d));
 end
-
-Clr = Csr*0;
-LO = find(ismember(hm.atlas.region,'LO'));
-LO = find(ismember(hm.atlas.colorTable,LO));
-%LO = LO(sort(unidrnd(length(LO),1,round(length(LO)/2))));
-RO = find(ismember(hm.atlas.region,'RO'));
-RO = find(ismember(hm.atlas.colorTable,RO));
-%RO = RO(sort(unidrnd(length(RO),1,round(length(RO)/2))));
-for i=1:length(LO)
-    for j=1:length(RO)
-        Clr(LO(i),RO(j)) = 1;
-        Clr(RO(j),LO(i)) = 1;
-    end
-end
-    
+Clr = Dist;
 
 %%
 Nm = size(cortex.vertices,1);
