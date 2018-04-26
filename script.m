@@ -2,6 +2,7 @@
 clear
 clc
 addpath ~/Projects/eeglab;eeglab;
+hm = headModel.loadFromFile(which('head_modelColin27_5003_Standard-10-5-Cap339-Destrieux148.mat'));
 close all
 
 %% Simulate one column
@@ -18,26 +19,26 @@ cc.simulate;
 openField = [1, 5];
 cc.plot(openField)
 
-%% Two coupled columns
-u1 = zeros(cc.nt,3);
-u1(Fs:Fs+10,3) = 0;
-u2 = zeros(cc.nt,3);
-%u2(Fs:Fs+10,2) = 10;
-
+%% 100 coupled columns
+u = zeros(cc.nt,3);
+u(Fs:Fs+10,3) = 0;
 cc = CorticalColumn({'sigma',diag([1 1 1]*1e2),'u',u1});
 
 n = 100;
 corticalColumns = repmat({cc},n,1);
-dcm = DynamicCausalModel({'nmmArray',corticalColumns,'SchortRange',0.02*(triu(rand(n))-tril(rand(n)))});
+dcm = DynamicCausalModel({'nmmArray',corticalColumns,'SchortRange',(triu(rand(n))-tril(rand(n)))/n});
 pyCell = 1:6:dcm.nx;
 xsim = dcm.simulate;
 dcm.plot(xsim(pyCell,:))
+
 %%
+n = size(hm.K,2);
+Adj = geometricTools.getAdjacencyMatrix(hm.cortex.vertices, hm.cortex.faces);
+corticalColumns = repmat({cc},n,1);
+dcm = DynamicCausalModel({'nmmArray',corticalColumns,'SchortRange',Adj/n});
 
-
-hm = headModel.loadDefault();
-cortex = hm.cortex;
-Csr = geometricTools.getAdjacencyMatrix(cortex.vertices,cortex.faces);
+%cortex = hm.cortex;
+%Csr = geometricTools.getAdjacencyMatrix(cortex.vertices,cortex.faces);
 
 %%
 Dist = zeros(size(cortex.vertices,1));

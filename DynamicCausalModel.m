@@ -1,8 +1,8 @@
 classdef DynamicCausalModel < handle
     properties
-        A = [];
-        B = [];
-        C = [];
+        A = sparse(0);
+        B = sparse(0);
+        C = sparse(0);
         x = [];
         u = [];
         w = [];
@@ -12,7 +12,7 @@ classdef DynamicCausalModel < handle
         tk = 1;
         nm
         mu = [];
-        sigma = [];
+        sigma = 0;
         srConnectivityCellIndices = [];
         lrConnectivityCellIndices = [];
         useGPU = false;
@@ -42,16 +42,34 @@ classdef DynamicCausalModel < handle
                 obj.dt = osc{1}.dt;
                 obj.nt = osc{1}.nt;
                 obj.nx = 0;
-                C0 = [];
+                C0 = sparse(0);
                 Csr = [];
-                for k=1:length(osc)
+                for k=1:obj.nm
                     obj.nx = obj.nx+osc{k}.nx;
-                    obj.A = diagmx(obj.A,osc{k}.A);
-                    obj.B = diagmx(obj.B,osc{k}.B);
-                    obj.mu = [obj.mu osc{k}.mu];
-                    obj.sigma = diagmx(obj.sigma,osc{k}.sigma);
-                    obj.u = [obj.u osc{k}.u];
-                    C0 = diagmx(C0,osc{k}.C);
+                end
+                if obj.nm > 500
+                    hwait = waitbar(0,'Building the system...');
+                    D = spdiags(ones(obj.nm,1),0,obj.nm,obj.nm);
+                    obj.A = kron(D,osc{1}.A);
+                    obj.B = kron(D,osc{1}.B);
+                    C0 = kron(D,osc{1}.C);
+                    obj.sigma = kron(D,osc{1}.sigma);
+                    obj.u = kron(ones(1,obj.nm),osc{1}.u);
+                    obj.mu = kron(ones(1,obj.nm),osc{1}.mu);
+                else
+                    obj.A = [];
+                    obj.B = [];
+                    obj.sigma = [];
+                    C0 = [];
+                    for k=1:obj.nm
+                        obj.nx = obj.nx+osc{k}.nx;
+                        obj.A = diagmx(obj.A,osc{k}.A);
+                        obj.B = diagmx(obj.B,osc{k}.B);
+                        obj.sigma = diagmx(obj.sigma,osc{k}.sigma);
+                        C0 = diagmx(C0,osc{k}.C);
+                        obj.u = [obj.u osc{k}.u];
+                        obj.mu = [obj.mu osc{k}.mu];
+                    end
                 end
                 
                 Csr = 0;
@@ -65,6 +83,12 @@ classdef DynamicCausalModel < handle
                             Csr = Csr+kron(Sr,osc{j}.Csr);
                         end
                     end
+                    if obj.nm > 500
+                        waitbar(i/obj.nm,hwait);
+                    end
+                end
+                if obj.nm > 500
+                    close(hwait);
                 end
                 ind = find(ismember(varargin(1:2:end),'LongRange'));
                 
