@@ -18,8 +18,6 @@ classdef DynamicCausalModel < handle
         useGPU = false;
         xbuffer = [];
         order = [];
-    %end
-    %properties(Constant)
         e0 = 5;
         v0 = 6;
         r = 0.56;
@@ -35,20 +33,23 @@ classdef DynamicCausalModel < handle
             end
             ind1 = find(ismember(varargin(1:2:end),'nmmArray'));
             ind2 = find(ismember(varargin(1:2:end),'SchortRange'));
+            ind3 = find(ismember(varargin(1:2:end),'LongRange'));
             if ~isempty(ind1) && ~isempty(ind2)
                 osc = varargin{ind1+1};
-                Cij = varargin{ind2*2};
+                ShortRange = varargin{ind2*2};
+                
                 obj.nm = length(osc);
                 obj.dt = osc{1}.dt;
                 obj.nt = osc{1}.nt;
                 obj.nx = 0;
-                C0 = sparse(0);
-                Csr = [];
+                Csr = cell(obj.nm,1);
+                Clr = cell(obj.nm,1);
                 for k=1:obj.nm
                     obj.nx = obj.nx+osc{k}.nx;
+                    Csr{k} = osc{k}.Csr;
+                    Clr{k} = osc{k}.Clr;
                 end
                 if obj.nm > 500
-                    hwait = waitbar(0,'Building the system...');
                     D = spdiags(ones(obj.nm,1),0,obj.nm,obj.nm);
                     obj.A = kron(D,osc{1}.A);
                     obj.B = kron(D,osc{1}.B);
@@ -62,7 +63,6 @@ classdef DynamicCausalModel < handle
                     obj.sigma = [];
                     C0 = [];
                     for k=1:obj.nm
-                        obj.nx = obj.nx+osc{k}.nx;
                         obj.A = diagmx(obj.A,osc{k}.A);
                         obj.B = diagmx(obj.B,osc{k}.B);
                         obj.sigma = diagmx(obj.sigma,osc{k}.sigma);
@@ -72,27 +72,26 @@ classdef DynamicCausalModel < handle
                     end
                 end
                 
-                Csr = 0;
-                for i=1:obj.nm
-                    for j=1:obj.nm
-                        if i==j
-                            continue
-                        elseif Cij(i,j)~=0
-                            Sr = zeros(obj.nm);
-                            Sr(i,j) = Cij(i,j);
-                            Csr = Csr+kron(Sr,osc{j}.Csr);
-                        end
-                    end
-                    if obj.nm > 500
-                        waitbar(i/obj.nm,hwait);
-                    end
+                obj.C = DynamicCausalModel.buildC(C0, Csr, ShortRange);
+                if ~isempty(ind3)
+                    LongRange = varargin{ind3*2};
+                    obj.C = DynamicCausalModel.buildC(obj.C, Clr, LongRange);
                 end
-                if obj.nm > 500
-                    close(hwait);
-                end
-                ind = find(ismember(varargin(1:2:end),'LongRange'));
-                
-                obj.C = C0+Csr;%+Clr;
+%                 Csr = 0;
+%                 for i=1:obj.nm
+%                     for j=1:obj.nm
+%                         if i==j
+%                             continue
+%                         elseif connections(i,j)~=0
+%                             Sr = zeros(obj.nm);
+%                             Sr(i,j) = connections(i,j);
+%                             Csr = Csr+kron(Sr,osc{j}.Csr);
+%                         end
+%                     end
+%                 end
+%                 ind = find(ismember(varargin(1:2:end),'LongRange'));
+%                 
+%                 obj.C = C0+Csr;%+Clr;
                 obj.x = zeros(obj.nx,1);
                 
                 obj.w = mvnrnd(ones(obj.nt,1)*obj.mu,obj.sigma);
@@ -142,7 +141,7 @@ classdef DynamicCausalModel < handle
         function xpred = predict(obj)
             obj.tk(obj.tk > obj.nt-1) = 1;
             xpred = obj.x + obj.A*obj.x+obj.B*obj.e;
-            if any(isnan(xpred)), error('Computation produced NaNs.');end
+            if any(isnan(xpred)), error('Computation produced NaN.');end
             obj.x = xpred;
             obj.tk = obj.tk+1;
         end
@@ -213,12 +212,6 @@ classdef DynamicCausalModel < handle
             save(filename,'-struct','s');
         end
     end
-    methods(Hidden)
-        function update_xbuffer(obj)
-            obj.xbuffer(:,2:end) = obj.xbuffer(:,1:end-1);
-            obj.xbuffer(:,1) = obj.x(1:2:end);
-        end
-    end
     methods(Static)
         function v = vect(x), v = x(:);end
         function obj = loadFromFile(filename)
@@ -252,14 +245,24 @@ classdef DynamicCausalModel < handle
             offsets_c = [1;cumsum(offsets_c(1:end-1))+1];
             offsets_r = [1;cumsum(offsets_r(1:end-1))+1];
             
-            for row=1:size(connections,1)
+            if n>1000
+                hwait = waitbar(0,'Building the system...');
+            end
+            Sign = sign(connections);
+            for row=1:n
                 ind = find(connections(row,:));
                 for loc=ind
-                    cij = Cij{loc};
+                    cij = Sign(row,loc)*Cij{loc};
                     [r,c] = size(cij);
                     C(offsets_r(row):offsets_r(row)+r-1,offsets_c(loc):offsets_c(loc)+c-1) = cij;
                     cellIndices{row,loc} = [offsets_r(row):offsets_r(row)+r-1;offsets_c(loc):offsets_c(loc)+c-1]';
                 end
+                if n>1000
+                    waitbar(row/n,hwait);
+                end
+            end
+            if n>1000
+                close(hwait);
             end
         end
     end
