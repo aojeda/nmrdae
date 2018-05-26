@@ -19,14 +19,29 @@ cc.simulate;
 openField = [1, 5];
 cc.plot(openField)
 
-%% 100 coupled columns
+%% 2 coupled columns
 u = zeros(cc.nt,3);
 u(Fs:Fs+10,3) = 0;
 cc = CorticalColumn({'sigma',diag([1 1 1]*1e2),'u',u});
 
-n = 100;
+n = 2;
 corticalColumns = repmat({cc},n,1);
-dcm = DynamicCausalModel({'nmmArray',corticalColumns,'SchortRange',2*(triu(rand(n))+tril(rand(n)))/n});
+corticalColumns{1}.Csr = corticalColumns{1}.Csr*0.01;
+C = ones(n);
+dcm = DynamicCausalModel({'nmmArray',corticalColumns,'SchortRange',C});
+pyCell = 1:6:dcm.nx;
+xsim = dcm.simulate;
+dcm.plot(xsim(pyCell,:))
+
+
+%% 2 decoupled columns
+u = zeros(cc.nt,3);
+u(Fs:Fs+10,3) = 0;
+cc = CorticalColumn({'sigma',diag([1 1 1]*4e2),'u',u});
+
+n = 2;
+corticalColumns = repmat({cc},n,1);
+dcm = DynamicCausalModel({'nmmArray',corticalColumns,'SchortRange',0*(triu(rand(n))+tril(rand(n)))/n});
 pyCell = 1:6:dcm.nx;
 xsim = dcm.simulate;
 dcm.plot(xsim(pyCell,:))

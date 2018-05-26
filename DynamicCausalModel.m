@@ -179,29 +179,29 @@ classdef DynamicCausalModel < handle
         end
         function plot(obj, xsim)
             figure;
-            subplot(211)
+            subplot(121)
             time = (0:size(xsim,2)-1)*obj.dt;
             plot(time,xsim');
             xlabel('Time (sec)');
-            ylabel('Post-synaptic potential (mV)')
-            title('Time response')
+            ylabel('uV')
+            title('Post-synaptic potential')
             mx = max(abs(xsim(:)));
             ylim([-mx mx]);
             grid;
             
-            subplot(212)
+            subplot(122)
             Fs = round(1/obj.dt);           
             [Pxx,freq] = pwelch(xsim',256,25,Fs);
             freq = freq/pi*Fs/2;
             plot(freq,10*log10(Pxx))
             xlim([1 max(freq)])
             xlabel('Frequency (Hz)')
-            ylabel('Power Spectral Density (dB/Hz)')
+            ylabel('dB/Hz')
             title('PSD Estimate')
             grid
         end
         function save2file(obj,filename)
-            if nargin < 2,
+            if nargin < 2
                 error('Need to pass in the name of the file where to save the object.')
             end
             pname = properties(obj);

@@ -109,59 +109,86 @@ close(hwait);
 x = filtfilt(filterDesign(Fs,30,35),1,x')';
 hm.plotOnModel(x);
 %%
-ROI = hm.atlas.label;
-dACC = find(ismember(hm.atlas.label,{'G_and_S_cingul-Mid-Ant R','G_and_S_cingul-Mid-Ant L'}));
-PCC = find(ismember(hm.atlas.label,{'G_cingul-Post-dorsal R','G_cingul-Post-dorsal L'}));
+dACC = find(ismember(hm.atlas.label,{'G_and_S_cingul-Mid-Ant R','G_and_S_cingul-Mid-Ant L','G_and_S_cingul-Ant L','G_and_S_cingul-Ant R'}));
+AI_R = find(ismember(hm.atlas.label,{'G_front_inf-Opercular R', 'G_front_inf-Triangul R', 'G_insular_short R','G_front_inf-Orbital R'}));
+AI_L = find(ismember(hm.atlas.label,{'G_front_inf-Opercular L', 'G_front_inf-Triangul L', 'G_insular_short L','G_front_inf-Orbital L'}));
+
+P = [any(hm.indices4Structure(hm.atlas.label(dACC)),2) any(hm.indices4Structure(hm.atlas.label(AI_L)),2) any(hm.indices4Structure(hm.atlas.label(AI_R)),2)];
+
+PCC = find(ismember(hm.atlas.label,{'G_cingul-Post-dorsal R','G_cingul-Post-dorsal L','G_cingul-Post-ventral L','G_cingul-Post-ventral L','S_subparietal R','S_subparietal L','G_and_S_cingul-Mid-Post L','G_and_S_cingul-Mid-Post R'}));
 MPFC_L = find(ismember(hm.atlas.label,{'G_front_middle L','S_front_middle L'}));
 MPFC_R = find(ismember(hm.atlas.label,{'G_front_middle R','S_front_middle R'}));
-ROI([dACC(2) PCC(2) MPFC_L(2) MPFC_R(2)]) = [];
-P = real(hm.indices4Structure(hm.atlas.label))';
-P(dACC(1),:) = sum(P(dACC,:));
-P(PCC(1),:) = sum(P(PCC,:));
-P(MPFC_L(1),:) = sum(P(MPFC_L,:));
-P(MPFC_R(1),:) = sum(P(MPFC_R,:));
-P([dACC(2) PCC(2) MPFC_L(2) MPFC_R(2)],:) = [];
-P = bsxfun(@rdivide,P,eps+sum(P,2));
 
-xroi = P*x;
+P = [P any(hm.indices4Structure(hm.atlas.label(PCC)),2) any(hm.indices4Structure(hm.atlas.label(MPFC_L)),2) any(hm.indices4Structure(hm.atlas.label(MPFC_R)),2)];
 
-ind = any(abs(xroi)>0.4,2);
-xroi(ind,:) = [];
-ROI(ind) = [];
+ROI = cat(2,{'dACC','IOC_L','IOC_R','PCC','MPFC_L','MPFC_R'},setdiff(hm.atlas.label,{...
+    'G_and_S_cingul-Mid-Ant R','G_and_S_cingul-Mid-Ant L','G_and_S_cingul-Ant L','G_and_S_cingul-Ant R',...
+    'G_front_inf-Opercular R', 'G_front_inf-Triangul R', 'G_insular_short R','G_front_inf-Orbital R',...
+    'G_front_inf-Opercular L', 'G_front_inf-Triangul L', 'G_insular_short L','G_front_inf-Orbital L',...
+    'G_cingul-Post-dorsal R','G_cingul-Post-dorsal L','G_cingul-Post-ventral L','G_cingul-Post-ventral L','S_subparietal R','S_subparietal L','G_and_S_cingul-Mid-Post L','G_and_S_cingul-Mid-Post R',...
+    'G_front_middle L','S_front_middle L','G_front_middle R','S_front_middle R'}));
+    
+P = [P hm.indices4Structure(ROI(7:end))];
+% P = bsxfun(@rdivide,P,eps+sum(P,1))';
+% xroi = P*x;
 
-ROI{ismember(ROI,'G_and_S_cingul-Mid-Ant L')} = 'dACC';
-ROI{ismember(ROI,'G_cingul-Post-dorsal L')} = 'PCC';
-net1 = find(ismember(ROI,{'dACC','G_front_inf-Opercular L','G_front_inf-Opercular R','G_insular_short L','G_insular_short R'}));
-net2 = find(ismember(ROI,{'PCC','G_front_middle L','G_front_middle R'}));
+xroi  = zeros(size(P,2),size(x,2));
+xroi_power  = zeros(size(P,2),size(x,2));
+for k=1:size(P,2)
+    ind = find(P(:,k));
+    xroi(k,:) = mean(x(ind,:));
+    xroi_power(k,:) = mean(abs(x(ind,:)));
+end
+xroi(7:end,:) = xroi(7:end,:)*0.3;
+xroi_power(7:end,:) = xroi_power(7:end,:)*0.35;
+net1 = [1 2 3];
+net2 = [4 5 6];
+xroi_power(net1,:) = xroi_power(net1,:)*std(std(xroi(net2,:)))/std(std(xroi(net1,:)));
+xroi(net1,:) = xroi(net1,:)*std(std(xroi(net2,:)))/std(std(xroi(net1,:)));
+bCoeff = ones(4,1);bCoeff = bCoeff/sum(bCoeff);
+xroi_power = filtfilt(bCoeff,1,xroi_power')';
 
-net1([3 5]) = [];
+save('x_131_roi.mat','xroi','xroi_power','net1','net2','Fs','t','ROI','');
 
-ROI2rm = {...
-    'G_Ins_lg_and_S_cent_ins L','G_Ins_lg_and_S_cent_ins R',...
-    'G_and_S_transv_frontopol L','G_and_S_transv_frontopol R',...
-    'G_subcallosal L','G_subcallosal R',...
-    'G_temp_sup-G_T_transv L','G_temp_sup-G_T_transv R',...
-    'G_temp_sup-Lateral L','G_temp_sup-Lateral R',...
-    'G_temp_sup-Plan_polar L','G_temp_sup-Plan_polar R',...
-    'G_temp_sup-Plan_tempo L','G_temp_sup-Plan_tempo R',...
-    'Lat_Fis-ant-Horizont L','Lat_Fis-ant-Horizont R',...
-    'Lat_Fis-ant-Vertical L','Lat_Fis-ant-Vertical R',...
-    'S_interm_prim-Jensen L','S_interm_prim-Jensen R',...
-    'S_intrapariet_and_P_trans L','S_intrapariet_and_P_trans R',...
-    'S_oc_middle_and_Lunatus L','S_oc_middle_and_Lunatus R',...
-    'S_orbital-H_Shaped L','S_orbital-H_Shaped R',...
-    'S_temporal_transverse L','S_temporal_transverse R'};
+%%
+color = bipolar(12);
+color = color([1:3 end-length(net2):end],:);
+indNoNet = setdiff(1:length(ROI),[net1 net2]);
 
-
-plot(t-0.5,xroi','color',[0.75 0.75 0.75])
+figure;
+plot(t-0.5,xroi(indNoNet,:)','color',[0.75 0.75 0.75])
 hold on;
-plot(t-0.5,xroi(net1,:)','b');
-plot(t-0.5,xroi(net2,:)','r');
+for k=1:length(net1)
+    plot(t-0.5,xroi(net1(k),:)','Color',color(k,:),'LineWidth',1);
+end
+for k=1:length(net2)
+    plot(t-0.5,xroi(net2(k),:)','Color',color(k+length(net2),:),'LineWidth',1);
+end
+title('Potential')
 xlim([0 8])
-xlabel('Time (sec)');ylabel('Estimated cortical activity')
+xlabel('Time (sec)');ylabel('Estimated cortical activity power averaged by ROI')
 grid on
-lg = legend({'AON ROIs','DMN ROIs'})
-save('x_139_roi.mat','xroi','net1','net2','Fs','t','ROI','ROI2rm');
+
+figure
+plot(t-0.5,xroi_power(indNoNet,:)','color',[0.75 0.75 0.75],'LineWidth',0.5)
+hold on;
+for k=1:length(net1)
+    plot(t-0.5,xroi_power(net1(k),:)','Color',color(k,:),'LineWidth',1);
+end
+for k=1:length(net2)
+    plot(t-0.5,xroi_power(net2(k),:)','Color',color(k+length(net2),:),'LineWidth',1);
+end
+xlim([0 8])
+ylim([0 .23])
+xlabel('Time (sec)');
+ylabel('Root mean square power by ROI')
+grid on
+
+%lg = legend({'AON ROIs','DMN ROIs'})
+
+%%
+Corr = corr(xroi_power(net1,t<5)',xroi_power(net1,t<5)');
+Corr = corr(xroi_power(:,t<5)',xroi_power(:,t<5)');
 
 %%
 fig = figure;
